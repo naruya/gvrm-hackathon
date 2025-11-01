@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { GVRM, GVRMUtils } from 'gvrm';
-import { FPSCounter } from '../fps.js';
+import { FPSCounter } from './utils/fps.js';
 import { createSky, createHouses, createFloor, createParticleFloor } from './scene.js';
 import { Walker } from './walker.js';
 
