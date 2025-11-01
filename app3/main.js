@@ -118,7 +118,7 @@ const loadDisplay = document.getElementById('loaddisplay');
 
 // Speech bubble system
 const speechBubbles = [];
-let lastHour = 8; // Start at 8:00 AM (same as virtualTime)
+let lastTwoHourBlock = Math.floor(8 / 2); // Start at 8:00 AM (same as virtualTime), track 2-hour blocks
 let gagsData = null;
 
 // Load gags from JSON file
@@ -219,18 +219,31 @@ function addTimelineEvent(virtualTime, eventText) {
 }
 
 function updateSpeechBubbles() {
-  const currentHour = Math.floor(virtualTime);
+  const currentTwoHourBlock = Math.floor(virtualTime / 2);
 
-  // Check if hour has changed
-  if (currentHour !== lastHour && gvrms.length > 0) {
-    // Random character speaks
-    const randomIndex = Math.floor(Math.random() * gvrms.length);
+  // Check if 2-hour block has changed
+  if (currentTwoHourBlock !== lastTwoHourBlock && gvrms.length > 0) {
+    // Get list of characters not currently speaking
+    const availableIndices = [];
+    for (let i = 0; i < gvrms.length; i++) {
+      // Check if this character's speech bubble is not currently visible
+      if (!speechBubbles[i] || !speechBubbles[i].classList.contains('show')) {
+        availableIndices.push(i);
+      }
+    }
 
-    // Get random gag
-    const gag = getRandomGag();
+    // Only speak if there's at least one available character
+    if (availableIndices.length > 0) {
+      // Random character speaks (from available ones)
+      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
 
-    showSpeechBubble(randomIndex, gag);
-    lastHour = currentHour;
+      // Get random gag
+      const gag = getRandomGag();
+
+      showSpeechBubble(randomIndex, gag);
+    }
+
+    lastTwoHourBlock = currentTwoHourBlock;
   }
 
   // Update speech bubble positions for all visible bubbles
