@@ -9,6 +9,7 @@ import { GVRM, GVRMUtils } from 'gvrm';
 import { FPSCounter } from './utils/fps.js';
 import { createSky, createHouses, createCenterHouse, updateSky } from './scene.js';
 import { Walker } from './walker.js';
+import { InteractionManager } from './interactionManager.js';
 
 // UI
 const container = document.getElementById('threejs-container');
@@ -107,29 +108,29 @@ function updateButtonStyles() {
 updateButtonStyles();
 
 const fbxFiles = [
-  './assets/Breathing.fbx',
-  './assets/Capoeira.fbx',
-  './assets/Listening.fbx',
-  './assets/Shrugging.fbx',
-  './assets/Texting.fbx',
-  './assets/Warrior.fbx',
-  './assets/Around.fbx'
+  '../assets/Breathing.fbx',
+  '../assets/Capoeira.fbx',
+  '../assets/Listening.fbx',
+  '../assets/Shrugging.fbx',
+  '../assets/Texting.fbx',
+  '../assets/Warrior.fbx',
+  '../assets/Around.fbx'
 ];
 
 const gvrmFiles = [
-  './assets/sample1.gvrm',
-  './assets/sample2.gvrm',
-  './assets/sample3.gvrm',
-  './assets/sample4.gvrm',
-  './assets/sample5.gvrm',
-  // './assets/sample6.gvrm',
-  // './assets/sample7.gvrm',
-  './assets/sample8.gvrm'
-  // './assets/sample9.gvrm'
+  '../assets/sample1.gvrm',
+  '../assets/sample2.gvrm',
+  '../assets/sample3.gvrm',
+  '../assets/sample4.gvrm',
+  '../assets/sample5.gvrm',
+  // '../assets/sample6.gvrm',
+  // '../assets/sample7.gvrm',
+  '../assets/sample8.gvrm'
+  // '../assets/sample9.gvrm'
 ];
 
 // Limit avatar count to not exceed gvrmFiles length
-const requestedN = parseInt(params.get('n')) || 3;
+const requestedN = parseInt(params.get('n')) || 4;
 let N = Math.min(requestedN, 6); // Max 6 avatars
 
 // Track current animation state for each model
@@ -149,6 +150,9 @@ const loadDisplay = document.getElementById('loaddisplay');
 const speechBubbles = [];
 let lastHour = 8; // Start at 8:00 AM (same as virtualTime)
 let commentsData = null;
+
+// Interaction system
+let interactionManager = null;
 
 // Load comments from JSON file
 fetch('./comments.json')
@@ -214,6 +218,67 @@ function showSpeechBubble(index, comment) {
   setTimeout(() => {
     bubble.classList.remove('show');
   }, 3000);
+}
+
+// Make showSpeechBubble accessible globally for interactions
+window.showSpeechBubble = showSpeechBubble;
+
+// Interaction display functions
+function updateInteractionDisplay(interactionName, index1, index2, remaining, duration) {
+  const displayElement = document.getElementById('interaction-display');
+  const nameElement = document.getElementById('interaction-name');
+  const participantsElement = document.getElementById('interaction-participants');
+  const remainingElement = document.getElementById('interaction-remaining');
+
+  if (!displayElement || !nameElement || !participantsElement || !remainingElement) return;
+
+  // Convert camelCase class name to readable format
+  // e.g., "GreetingInteraction" -> "Greeting"
+  const readableName = interactionName.replace('Interaction', '').replace(/([A-Z])/g, ' $1').trim();
+
+  nameElement.textContent = readableName;
+  participantsElement.textContent = `Avatar ${index1 + 1} & Avatar ${index2 + 1}`;
+
+  // Calculate remaining time in virtual hours and minutes
+  const remainingFrames = remaining;
+  const totalFrames = duration;
+  const percentComplete = ((totalFrames - remainingFrames) / totalFrames * 100).toFixed(0);
+
+  const remainingVirtualSeconds = remainingFrames / 60; // Assuming 60fps
+  const remainingVirtualMinutes = Math.floor(remainingVirtualSeconds / 60);
+  const remainingVirtualHours = Math.floor(remainingVirtualMinutes / 60);
+
+  if (remainingVirtualHours > 0) {
+    remainingElement.textContent = `残り ${remainingVirtualHours}時間${remainingVirtualMinutes % 60}分 (${percentComplete}%)`;
+  } else {
+    remainingElement.textContent = `残り ${remainingVirtualMinutes}分 (${percentComplete}%)`;
+  }
+
+  displayElement.classList.add('active');
+}
+
+function hideInteractionDisplay() {
+  const displayElement = document.getElementById('interaction-display');
+  if (displayElement) {
+    displayElement.classList.remove('active');
+  }
+}
+
+// Initialize InteractionManager
+function initializeInteractionManager() {
+  if (!interactionManager && gvrms.length >= 2) {
+    const context = {
+      timeOfDay: virtualTime,
+      centerHouse: centerHouse,
+      camera: camera,
+      showSpeechBubble: showSpeechBubble,
+      updateInteractionDisplay: updateInteractionDisplay,
+      hideInteractionDisplay: hideInteractionDisplay
+    };
+
+    interactionManager = new InteractionManager(gvrms, walkers, context);
+    console.log('InteractionManager initialized');
+  }
 }
 
 function updateSpeechBubbles() {
@@ -328,7 +393,7 @@ async function loadAllModels() {
       walkers.push(walker);
 
       // Load Idle.fbx then initialize Walker
-      gvrm.changeFBX('./assets/Idle.fbx').then(() => {
+      gvrm.changeFBX('../assets/Idle.fbx').then(() => {
         loadCount++;
         updateLoadingDisplay();
 
@@ -337,6 +402,8 @@ async function loadAllModels() {
 
         if (loadCount === totalLoadCount) {
           allModelsReady = true;
+          // Initialize InteractionManager once all models are ready
+          initializeInteractionManager();
         }
       });
     });
@@ -402,13 +469,18 @@ increaseButton.addEventListener('click', async () => {
     walkers.push(walker);
 
     // Load Idle.fbx then initialize Walker
-    await gvrm.changeFBX('./assets/Idle.fbx');
+    await gvrm.changeFBX('../assets/Idle.fbx');
     walker.initAnimations();
     loadCount++;
     updateLoadingDisplay();
 
     if (loadCount >= totalLoadCount) {
       allModelsReady = true;
+    }
+
+    // Re-initialize InteractionManager if we have at least 2 avatars
+    if (gvrms.length >= 2) {
+      initializeInteractionManager();
     }
   }
 });
@@ -651,11 +723,16 @@ function animate() {
   // Update speech bubbles
   updateSpeechBubbles();
 
+  // Update interactions
+  if (interactionManager) {
+    interactionManager.update(virtualTime);
+  }
+
   for (let i = 0; i < gvrms.length; i++) {
     const gvrm = gvrms[i];
     if (gvrm && gvrm.isReady) {
-      // Update Walker
-      if (walkers[i]) {
+      // Update Walker (skip if in interaction)
+      if (walkers[i] && !walkers[i].inInteraction) {
         walkers[i].update();
       }
 

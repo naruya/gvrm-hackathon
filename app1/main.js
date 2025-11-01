@@ -96,25 +96,25 @@ function updateButtonStyles() {
 updateButtonStyles();
 
 const fbxFiles = [
-  './assets/Breathing.fbx',
-  './assets/Capoeira.fbx',
-  './assets/Listening.fbx',
-  './assets/Shrugging.fbx',
-  './assets/Texting.fbx',
-  './assets/Warrior.fbx',
-  './assets/Around.fbx'
+  '../assets/Breathing.fbx',
+  '../assets/Capoeira.fbx',
+  '../assets/Listening.fbx',
+  '../assets/Shrugging.fbx',
+  '../assets/Texting.fbx',
+  '../assets/Warrior.fbx',
+  '../assets/Around.fbx'
 ];
 
 const gvrmFiles = [
-  './assets/sample1.gvrm',
-  './assets/sample2.gvrm',
-  './assets/sample3.gvrm',
-  './assets/sample4.gvrm',
-  './assets/sample5.gvrm',
-  // './assets/sample6.gvrm',
-  // './assets/sample7.gvrm',
-  './assets/sample8.gvrm'
-  // './assets/sample9.gvrm'
+  '../assets/sample1.gvrm',
+  '../assets/sample2.gvrm',
+  '../assets/sample3.gvrm',
+  '../assets/sample4.gvrm',
+  '../assets/sample5.gvrm',
+  // '../assets/sample6.gvrm',
+  // '../assets/sample7.gvrm',
+  '../assets/sample8.gvrm'
+  // '../assets/sample9.gvrm'
 ];
 
 // Limit avatar count to not exceed gvrmFiles length
@@ -176,7 +176,7 @@ async function loadAllModels() {
       walkers.push(walker);
 
       // Load Idle.fbx then initialize Walker
-      gvrm.changeFBX('./assets/Idle.fbx').then(() => {
+      gvrm.changeFBX('../assets/Idle.fbx').then(() => {
         loadCount++;
         updateLoadingDisplay();
 
@@ -245,7 +245,7 @@ increaseButton.addEventListener('click', async () => {
     walkers.push(walker);
 
     // Load Idle.fbx then initialize Walker
-    await gvrm.changeFBX('./assets/Idle.fbx');
+    await gvrm.changeFBX('../assets/Idle.fbx');
     walker.initAnimations();
     loadCount++;
     updateLoadingDisplay();

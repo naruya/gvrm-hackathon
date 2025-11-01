@@ -54,11 +54,11 @@ export class Walker {
 
     try {
       // Load Walking animation
-      await this.gvrm.changeFBX('./assets/Walking.fbx');
+      await this.gvrm.changeFBX('../assets/Walking.fbx');
       this.walkingAction = this.gvrm.character.action;
 
       // Load Idle animation
-      await this.gvrm.changeFBX('./assets/Idle.fbx');
+      await this.gvrm.changeFBX('../assets/Idle.fbx');
       this.idleAction = this.gvrm.character.action;
 
       // Start with Idle animation

@@ -71,8 +71,8 @@ export function createCenterHouse(scene) {
   window4.rotation.y = Math.PI / 2;
   house.add(window4);
 
-  // Position the house at the center
-  house.position.set(0, 0, 0);
+  // Position the house at x=0, z=-10
+  house.position.set(0, 0, -10);
 
   scene.add(house);
 

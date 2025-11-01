@@ -144,6 +144,44 @@
       color: white !important;
     }
 
+    #interaction-display {
+      position: absolute;
+      top: 40px;
+      right: 8px;
+      font-size: 13px;
+      color: rgba(255, 255, 255, 0.9);
+      background: rgba(0, 0, 0, 0.4);
+      padding: 10px 15px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      min-width: 200px;
+      display: none;
+    }
+
+    #interaction-display.active {
+      display: block;
+    }
+
+    #interaction-display .interaction-title {
+      font-weight: bold;
+      margin-bottom: 5px;
+      color: rgba(255, 200, 100, 1);
+      font-size: 14px;
+    }
+
+    #interaction-display .interaction-participants {
+      font-size: 12px;
+      color: rgba(255, 255, 255, 0.8);
+      margin-top: 3px;
+    }
+
+    #interaction-display .interaction-time {
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.6);
+      margin-top: 5px;
+    }
+
     .button-container {
       display: flex;
       gap: 10px;
@@ -261,6 +299,12 @@
     Loading: <div id="loaddisplay" style="display: inline;">0%</div>
   </div>
 
+  <div id="interaction-display">
+    <div class="interaction-title" id="interaction-name">-</div>
+    <div class="interaction-participants" id="interaction-participants">-</div>
+    <div class="interaction-time" id="interaction-remaining">-</div>
+  </div>
+
   <div class="button-container">
     <button class="control-button" id="home-button">← Home</button>
     <button class="control-button" id="sceneButton">Switch Scene</button>
@@ -270,7 +314,7 @@
     <div style="margin-bottom: 12px; font-size: 16px;">Add / Remove Avatars (max 6)</div>
     <div>
       <button class="avatar-control-button" id="decreaseButton">-</button>
-      <span id="avatarCount" style="margin: 0 15px; font-size: 16px;">3</span>
+      <span id="avatarCount" style="margin: 0 15px; font-size: 16px;">4</span>
       <button class="avatar-control-button" id="increaseButton">+</button>
     </div>
   </div>

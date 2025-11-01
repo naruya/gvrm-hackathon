@@ -24,10 +24,7 @@ export class Walker {
     // Boundary (movement area for avatars) - 1.5x larger
     this.boundary = 11.25;
 
-    // Exclusion zone around center house
-    this.houseRadius = 3.5;
-
-    // Set random target position (avoiding the center house)
+    // Set random target position
     this.setNewTarget();
 
     // Set random initial rotation
@@ -35,42 +32,39 @@ export class Walker {
     this.targetRotation = 0;
     this.currentRotation = initialRotation;
 
-    this.arrivalThreshold = 0.3; // Distance threshold for reaching target
+    this.arrivalThreshold = 0.15; // Distance threshold for reaching target
     this.justChangedTarget = false; // Flag to prevent rapid target changes
+
+    this.hasTemporaryTarget = false; // For interaction movement
+    this.onTemporaryTargetReached = null; // Callback when temporary target is reached
 
     this.animationsLoaded = false;
   }
 
-  // Set new target position (avoiding center house)
+  // Set new target position
   setNewTarget() {
-    let validPosition = false;
-    let attempts = 0;
-    const maxAttempts = 50;
+    // Generate random position within boundary (safe range)
+    const maxRange = this.boundary * 0.85; // 85% of boundary to stay safely inside
+    this.targetX = (Math.random() - 0.5) * 2 * maxRange;
+    this.targetZ = (Math.random() - 0.5) * 2 * maxRange;
+  }
 
-    while (!validPosition && attempts < maxAttempts) {
-      // Generate random position within boundary (90% of range)
-      const x = (Math.random() - 0.5) * this.boundary * 1.8;
-      const z = (Math.random() - 0.5) * this.boundary * 1.8;
+  // Set temporary target for interaction (overrides normal walking behavior)
+  setTemporaryTarget(x, z, callback) {
+    this.targetX = x;
+    this.targetZ = z;
+    this.hasTemporaryTarget = true;
+    this.onTemporaryTargetReached = callback;
 
-      // Check if position is outside house exclusion zone
-      const distanceFromCenter = Math.sqrt(x * x + z * z);
+    // Force walking state
+    this.shouldWalk = true;
+    this.switchToWalking();
+  }
 
-      if (distanceFromCenter > this.houseRadius) {
-        this.targetX = x;
-        this.targetZ = z;
-        validPosition = true;
-      }
-
-      attempts++;
-    }
-
-    // Fallback: if no valid position found, place at boundary edge
-    if (!validPosition) {
-      const angle = Math.random() * Math.PI * 2;
-      const radius = this.boundary * 0.8;
-      this.targetX = Math.cos(angle) * radius;
-      this.targetZ = Math.sin(angle) * radius;
-    }
+  // Clear temporary target
+  clearTemporaryTarget() {
+    this.hasTemporaryTarget = false;
+    this.onTemporaryTargetReached = null;
   }
 
   async initAnimations() {
@@ -81,11 +75,11 @@ export class Walker {
 
     try {
       // Load Walking animation
-      await this.gvrm.changeFBX('./assets/Walking.fbx');
+      await this.gvrm.changeFBX('../assets/Walking.fbx');
       this.walkingAction = this.gvrm.character.action;
 
       // Load Idle animation
-      await this.gvrm.changeFBX('./assets/Idle.fbx');
+      await this.gvrm.changeFBX('../assets/Idle.fbx');
       this.idleAction = this.gvrm.character.action;
 
       // Start with Idle animation
@@ -133,11 +127,20 @@ export class Walker {
       // Calculate direction to target (accounting for rotation0)
       const rot0 = character.rotation0.clone();
       const worldRotation = Math.atan2(dx, dz);
-      this.targetRotation = worldRotation + rot0.y;
+      this.targetRotation = worldRotation - rot0.y;
 
       // Set new target when reached
       if (distanceToTarget < this.arrivalThreshold) {
-        this.setNewTarget();
+        if (this.hasTemporaryTarget) {
+          // Reached temporary target (for interaction)
+          if (this.onTemporaryTargetReached) {
+            this.onTemporaryTargetReached();
+          }
+          this.clearTemporaryTarget();
+        } else {
+          // Normal walking - set new random target
+          this.setNewTarget();
+        }
       }
     }
 
