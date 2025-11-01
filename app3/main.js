@@ -7,7 +7,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TrackballControls } from 'three/addons/controls/TrackballControls.js';
 import { GVRM, GVRMUtils } from 'gvrm';
 import { FPSCounter } from './utils/fps.js';
-import { createSky, createHouses, createFloor, createParticleFloor } from './scene.js';
+import { createSky, createHouses, createCenterHouse, updateSky } from './scene.js';
 import { Walker } from './walker.js';
 
 // UI
@@ -51,6 +51,12 @@ controls2.update();
 // scene
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
+
+// Ambient light (constant illumination)
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+
+// Directional light
 const light = new THREE.DirectionalLight(0xffffff, Math.PI);
 light.position.set(10.0, 10.0, 10.0);
 scene.add(light);
@@ -61,10 +67,15 @@ let gridHelper = new THREE.GridHelper(300, 60, 0x808080, 0x808080); // Dark scen
 scene.add(gridHelper);
 const axesHelper = new THREE.AxesHelper(0.5);
 scene.add(axesHelper);
-let vectorFloor = createFloor(scene);
-vectorFloor.visible = true; // Visible in Scene 2
-let sky = createSky(scene, 2);
+let sky = createSky(scene);
 createHouses(scene);
+
+// Add center house
+const centerHouse = createCenterHouse(scene);
+
+// Time system (accelerated time, 24 hours in 1 real minute)
+let virtualTime = 8; // Start at 8:00 AM (in hours, 0-24)
+const timeSpeed = 24 / 60; // 60 real seconds = 24 virtual hours, so 1 second = 0.4 hours = 24 minutes
 
 const fbxFiles = [
   '../assets/Breathing.fbx',
@@ -105,6 +116,141 @@ let allModelsReady = false;
 
 const loadDisplay = document.getElementById('loaddisplay');
 
+// Speech bubble system
+const speechBubbles = [];
+let lastHour = 8; // Start at 8:00 AM (same as virtualTime)
+let gagsData = null;
+
+// Load gags from JSON file
+fetch('./gags.json')
+  .then(response => response.json())
+  .then(data => {
+    gagsData = data;
+    console.log('Gags loaded successfully');
+  })
+  .catch(error => {
+    console.error('Failed to load gags:', error);
+    gagsData = []; // Fallback to empty array
+  });
+
+function createSpeechBubble(index) {
+  const bubble = document.createElement('div');
+  bubble.className = 'speech-bubble';
+  bubble.textContent = 'やっほー';
+  document.getElementById('speech-bubbles-container').appendChild(bubble);
+  speechBubbles[index] = bubble;
+  return bubble;
+}
+
+function getRandomGag() {
+  if (!gagsData || gagsData.length === 0) {
+    return 'やっほー'; // Default fallback
+  }
+
+  // Select random gag from the list
+  const randomIndex = Math.floor(Math.random() * gagsData.length);
+  return gagsData[randomIndex];
+}
+
+function showSpeechBubble(index, comment) {
+  if (!gvrms[index] || !gvrms[index].isReady) return;
+
+  const bubble = speechBubbles[index];
+  const character = gvrms[index].character.currentVrm.scene;
+
+  // Set the comment text
+  bubble.textContent = comment;
+
+  // Convert 3D position to 2D screen position
+  const pos3D = character.position.clone();
+  pos3D.y += 3; // Position above character's head
+  pos3D.project(camera);
+
+  const x = (pos3D.x * 0.5 + 0.5) * width;
+  const y = (-(pos3D.y * 0.5) + 0.5) * height;
+
+  bubble.style.left = `${x}px`;
+  bubble.style.top = `${y}px`;
+  bubble.style.transform = 'translate(-50%, -100%)';
+  bubble.classList.add('show');
+
+  // Hide after 9 seconds
+  setTimeout(() => {
+    bubble.classList.remove('show');
+  }, 9000);
+}
+
+// Make showSpeechBubble accessible globally for interactions
+window.showSpeechBubble = showSpeechBubble;
+
+// Interaction display functions
+// Timeline functions
+function formatTimeHM(virtualTime) {
+  const hours = Math.floor(virtualTime);
+  const minutes = Math.floor((virtualTime - hours) * 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function addTimelineEvent(virtualTime, eventText) {
+  const timelineEntries = document.getElementById('timeline-entries');
+  if (!timelineEntries) return;
+
+  const entry = document.createElement('div');
+  entry.className = 'timeline-entry';
+
+  const timeSpan = document.createElement('div');
+  timeSpan.className = 'timeline-time';
+  timeSpan.textContent = formatTimeHM(virtualTime);
+
+  const eventSpan = document.createElement('div');
+  eventSpan.className = 'timeline-event';
+  eventSpan.textContent = eventText;
+
+  entry.appendChild(timeSpan);
+  entry.appendChild(eventSpan);
+
+  // Add to the top (prepend)
+  timelineEntries.insertBefore(entry, timelineEntries.firstChild);
+
+  // Limit to 50 entries
+  while (timelineEntries.children.length > 50) {
+    timelineEntries.removeChild(timelineEntries.lastChild);
+  }
+}
+
+function updateSpeechBubbles() {
+  const currentHour = Math.floor(virtualTime);
+
+  // Check if hour has changed
+  if (currentHour !== lastHour && gvrms.length > 0) {
+    // Random character speaks
+    const randomIndex = Math.floor(Math.random() * gvrms.length);
+
+    // Get random gag
+    const gag = getRandomGag();
+
+    showSpeechBubble(randomIndex, gag);
+    lastHour = currentHour;
+  }
+
+  // Update speech bubble positions for all visible bubbles
+  for (let i = 0; i < speechBubbles.length; i++) {
+    if (speechBubbles[i] && speechBubbles[i].classList.contains('show')) {
+      if (gvrms[i] && gvrms[i].isReady) {
+        const character = gvrms[i].character.currentVrm.scene;
+        const pos3D = character.position.clone();
+        pos3D.y += 3;
+        pos3D.project(camera);
+
+        const x = (pos3D.x * 0.5 + 0.5) * width;
+        const y = (-(pos3D.y * 0.5) + 0.5) * height;
+
+        speechBubbles[i].style.left = `${x}px`;
+        speechBubbles[i].style.top = `${y}px`;
+      }
+    }
+  }
+}
 
 // Function to shuffle and assign animations without duplicates
 function shuffleAnimations() {
@@ -119,17 +265,51 @@ function shuffleAnimations() {
   return indices;
 }
 
+// Generate random position avoiding center house
+function generateRandomPosition(boundary, houseRadius) {
+  let validPosition = false;
+  let attempts = 0;
+  const maxAttempts = 50;
+  let x, z;
+
+  while (!validPosition && attempts < maxAttempts) {
+    x = (Math.random() - 0.5) * boundary * 2;
+    z = (Math.random() - 0.5) * boundary * 2;
+
+    // Check if position is outside house exclusion zone
+    const distanceFromCenter = Math.sqrt(x * x + z * z);
+
+    if (distanceFromCenter > houseRadius) {
+      validPosition = true;
+    }
+
+    attempts++;
+  }
+
+  // Fallback: place at boundary edge if no valid position found
+  if (!validPosition) {
+    const angle = Math.random() * Math.PI * 2;
+    const radius = boundary * 0.8;
+    x = Math.cos(angle) * radius;
+    z = Math.sin(angle) * radius;
+  }
+
+  return { x, z };
+}
+
 async function loadAllModels() {
-  const boundary = 7.5; // Use same boundary as walker
+  const boundary = 11.25; // 1.5x larger boundary (same as walker)
+  const houseRadius = 3.5; // Exclusion zone around center house
 
   for (let i = 0; i < N; i++) {
     const fileName = gvrmFiles[i].split('/').pop();
     const promise = GVRM.load(gvrmFiles[i], scene, camera, renderer, fileName);
 
     promise.then((gvrm) => {
-      // Generate random initial position
-      const randomX = (Math.random() - 0.5) * boundary * 2;
-      const randomZ = (Math.random() - 0.5) * boundary * 2;
+      // Generate random initial position (avoiding center house)
+      const pos = generateRandomPosition(boundary, houseRadius);
+      const randomX = pos.x;
+      const randomZ = pos.z;
       const randomY = 0;
 
       // Generate random initial rotation
@@ -141,6 +321,9 @@ async function loadAllModels() {
       gvrms.push(gvrm);
       // Set initial animation to Idle
       modelAnimations.push(0);
+
+      // Create speech bubble for this character
+      createSpeechBubble(gvrms.length - 1);
 
       // Create Walker
       const walker = new Walker(gvrm, i);
@@ -156,6 +339,8 @@ async function loadAllModels() {
 
         if (loadCount === totalLoadCount) {
           allModelsReady = true;
+          // Initialize InteractionManager once all models are ready
+          // Interaction manager removed
         }
       });
     });
@@ -332,10 +517,34 @@ function animate() {
     return;
   }
 
-  // Update vector field floor animation
-  if (vectorFloor) {
-    vectorFloor.material.uniforms.time.value = performance.now() * 0.001;
+  // Update virtual time (1 frame ≈ 0.016s at 60fps, so time advances by ~0.016 * timeSpeed per frame)
+  virtualTime += timeSpeed / 60; // timeSpeed is per second, so divide by 60 for per-frame
+  if (virtualTime >= 24) {
+    virtualTime -= 24; // Wrap around to 0 after 24 hours
   }
+
+  // Update sky based on time
+  updateSky(sky, virtualTime);
+
+  // Update analog clock
+  const hours = Math.floor(virtualTime) % 12; // 12-hour format (integer part only)
+  const minutes = (virtualTime - Math.floor(virtualTime)) * 60;
+
+  const hourHand = document.getElementById('hour-hand');
+  const minuteHand = document.getElementById('minute-hand');
+
+  if (hourHand && minuteHand) {
+    // Hour hand: 30 degrees per hour + 0.5 degrees per minute
+    const hourDegrees = (hours * 30) + (minutes * 0.5);
+    // Minute hand: 6 degrees per minute
+    const minuteDegrees = minutes * 6;
+
+    hourHand.style.transform = `rotate(${hourDegrees}deg)`;
+    minuteHand.style.transform = `rotate(${minuteDegrees}deg)`;
+  }
+
+  // Update speech bubbles
+  updateSpeechBubbles();
 
   for (let i = 0; i < gvrms.length; i++) {
     const gvrm = gvrms[i];

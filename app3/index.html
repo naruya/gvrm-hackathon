@@ -144,47 +144,9 @@
       color: white !important;
     }
 
-    #interaction-display {
-      position: absolute;
-      top: 40px;
-      right: 8px;
-      font-size: 13px;
-      color: rgba(255, 255, 255, 0.9);
-      background: rgba(0, 0, 0, 0.4);
-      padding: 10px 15px;
-      border-radius: 8px;
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.2);
-      min-width: 200px;
-      display: none;
-    }
-
-    #interaction-display.active {
-      display: block;
-    }
-
-    #interaction-display .interaction-title {
-      font-weight: bold;
-      margin-bottom: 5px;
-      color: rgba(255, 200, 100, 1);
-      font-size: 14px;
-    }
-
-    #interaction-display .interaction-participants {
-      font-size: 12px;
-      color: rgba(255, 255, 255, 0.8);
-      margin-top: 3px;
-    }
-
-    #interaction-display .interaction-time {
-      font-size: 11px;
-      color: rgba(255, 255, 255, 0.6);
-      margin-top: 5px;
-    }
-
     #timeline {
       position: absolute;
-      top: 140px;
+      top: 40px;
       right: 8px;
       width: 280px;
       max-height: 500px;
@@ -359,12 +321,6 @@
 
   <div id="infoR" class="info">
     Loading: <div id="loaddisplay" style="display: inline;">0%</div>
-  </div>
-
-  <div id="interaction-display">
-    <div class="interaction-title" id="interaction-name">-</div>
-    <div class="interaction-participants" id="interaction-participants">-</div>
-    <div class="interaction-time" id="interaction-remaining">-</div>
   </div>
 
   <div id="timeline">

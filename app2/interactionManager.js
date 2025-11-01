@@ -243,6 +243,15 @@ export class InteractionManager {
 
     console.log(`Started interaction: ${interaction.constructor.name} between avatars ${avatars.index1} and ${avatars.index2}`);
 
+    // Add timeline event
+    if (this.context.addTimelineEvent) {
+      const readableName = interaction.constructor.name.replace('Interaction', '').replace(/([A-Z])/g, ' $1').trim();
+      this.context.addTimelineEvent(
+        this.context.timeOfDay,
+        `${readableName} (Avatar ${avatars.index1 + 1} & ${avatars.index2 + 1})`
+      );
+    }
+
     // Update interaction display
     if (this.context.updateInteractionDisplay) {
       this.context.updateInteractionDisplay(

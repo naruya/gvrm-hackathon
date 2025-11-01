@@ -78,35 +78,6 @@ const centerHouse = createCenterHouse(scene);
 let virtualTime = 8; // Start at 8:00 AM (in hours, 0-24)
 const timeSpeed = 24 / 60; // 60 real seconds = 24 virtual hours, so 1 second = 0.4 hours = 24 minutes
 
-// Function to update button styles
-function updateButtonStyles() {
-  const homeButton = document.getElementById('home-button');
-  const sceneButton = document.getElementById('sceneButton');
-  const increaseButton = document.getElementById('increaseButton');
-  const decreaseButton = document.getElementById('decreaseButton');
-
-  if (currentScene === 1) {
-    // Bright scene: Black
-    homeButton.style.color = 'rgba(0, 0, 0, 0.7)';
-    homeButton.style.borderColor = 'rgba(0, 0, 0, 0.5)';
-    homeButton.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-    sceneButton.style.color = 'rgba(0, 0, 0, 0.7)';
-    sceneButton.style.borderColor = 'rgba(0, 0, 0, 0.5)';
-    sceneButton.style.backgroundColor = 'rgba(0, 0, 0, 0.05)';
-  } else {
-    // Dark scene: White
-    homeButton.style.color = 'rgba(255, 255, 255, 0.4)';
-    homeButton.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-    homeButton.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
-    sceneButton.style.color = 'rgba(255, 255, 255, 0.4)';
-    sceneButton.style.borderColor = 'rgba(255, 255, 255, 0.3)';
-    sceneButton.style.backgroundColor = 'rgba(0, 0, 0, 0.2)';
-  }
-}
-
-// Set initial styles
-updateButtonStyles();
-
 const fbxFiles = [
   '../assets/Breathing.fbx',
   '../assets/Capoeira.fbx',
@@ -130,7 +101,7 @@ const gvrmFiles = [
 ];
 
 // Limit avatar count to not exceed gvrmFiles length
-const requestedN = parseInt(params.get('n')) || 4;
+const requestedN = parseInt(params.get('n')) || 6;
 let N = Math.min(requestedN, 6); // Max 6 avatars
 
 // Track current animation state for each model
@@ -264,6 +235,40 @@ function hideInteractionDisplay() {
   }
 }
 
+// Timeline functions
+function formatTimeHM(virtualTime) {
+  const hours = Math.floor(virtualTime);
+  const minutes = Math.floor((virtualTime - hours) * 60);
+  return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}`;
+}
+
+function addTimelineEvent(virtualTime, eventText) {
+  const timelineEntries = document.getElementById('timeline-entries');
+  if (!timelineEntries) return;
+
+  const entry = document.createElement('div');
+  entry.className = 'timeline-entry';
+
+  const timeSpan = document.createElement('div');
+  timeSpan.className = 'timeline-time';
+  timeSpan.textContent = formatTimeHM(virtualTime);
+
+  const eventSpan = document.createElement('div');
+  eventSpan.className = 'timeline-event';
+  eventSpan.textContent = eventText;
+
+  entry.appendChild(timeSpan);
+  entry.appendChild(eventSpan);
+
+  // Add to the top (prepend)
+  timelineEntries.insertBefore(entry, timelineEntries.firstChild);
+
+  // Limit to 50 entries
+  while (timelineEntries.children.length > 50) {
+    timelineEntries.removeChild(timelineEntries.lastChild);
+  }
+}
+
 // Initialize InteractionManager
 function initializeInteractionManager() {
   if (!interactionManager && gvrms.length >= 2) {
@@ -273,7 +278,8 @@ function initializeInteractionManager() {
       camera: camera,
       showSpeechBubble: showSpeechBubble,
       updateInteractionDisplay: updateInteractionDisplay,
-      hideInteractionDisplay: hideInteractionDisplay
+      hideInteractionDisplay: hideInteractionDisplay,
+      addTimelineEvent: addTimelineEvent
     };
 
     interactionManager = new InteractionManager(gvrms, walkers, context);
@@ -425,93 +431,6 @@ async function setModelAnimation(gvrm, animationIndex) {
 
 loadAllModels();
 
-// Avatar count control
-const avatarCountDisplay = document.getElementById('avatarCount');
-const increaseButton = document.getElementById('increaseButton');
-const decreaseButton = document.getElementById('decreaseButton');
-
-function updateAvatarCountDisplay() {
-  avatarCountDisplay.textContent = N;
-  decreaseButton.disabled = N <= 1;
-  increaseButton.disabled = N >= 6;
-}
-
-increaseButton.addEventListener('click', async () => {
-  if (N < 6 && N < gvrmFiles.length) {
-    const newIndex = N;
-    N++;
-    totalLoadCount = N;
-    updateAvatarCountDisplay();
-
-    // Load new avatar
-    const fileName = gvrmFiles[newIndex].split('/').pop();
-    const gvrm = await GVRM.load(gvrmFiles[newIndex], scene, camera, renderer, fileName);
-
-    // Set random position and rotation (avoiding center house)
-    const boundary = 11.25;
-    const houseRadius = 3.5;
-    const pos = generateRandomPosition(boundary, houseRadius);
-    const randomX = pos.x;
-    const randomZ = pos.z;
-    const randomRotationY = (Math.random() - 0.5) * Math.PI * 2;
-
-    gvrm.character.currentVrm.scene.position.set(randomX, 0, randomZ);
-    gvrm.character.currentVrm.scene.rotation.y = randomRotationY;
-
-    gvrms.push(gvrm);
-    modelAnimations.push(0);
-
-    // Create speech bubble for this character
-    createSpeechBubble(gvrms.length - 1);
-
-    // Create Walker
-    const walker = new Walker(gvrm, gvrms.length - 1);
-    walkers.push(walker);
-
-    // Load Idle.fbx then initialize Walker
-    await gvrm.changeFBX('../assets/Idle.fbx');
-    walker.initAnimations();
-    loadCount++;
-    updateLoadingDisplay();
-
-    if (loadCount >= totalLoadCount) {
-      allModelsReady = true;
-    }
-
-    // Re-initialize InteractionManager if we have at least 2 avatars
-    if (gvrms.length >= 2) {
-      initializeInteractionManager();
-    }
-  }
-});
-
-decreaseButton.addEventListener('click', async () => {
-  if (N > 1 && gvrms.length > 0) {
-    N--;
-    totalLoadCount = N;
-    loadCount = Math.min(loadCount, N);
-    updateAvatarCountDisplay();
-    updateLoadingDisplay();
-
-    // Remove last avatar
-    const gvrm = gvrms.pop();
-    walkers.pop();
-    modelAnimations.pop();
-
-    // Remove speech bubble
-    const bubble = speechBubbles.pop();
-    if (bubble && bubble.parentNode) {
-      bubble.parentNode.removeChild(bubble);
-    }
-
-    if (gvrm) {
-      await GVRM.remove(gvrm, scene);
-    }
-  }
-});
-
-updateAvatarCountDisplay();
-
 const fpsc = new FPSCounter();
 
 let stateAnim = "play";
@@ -563,33 +482,6 @@ window.addEventListener('keydown', function (event) {
       GVRMUtils.visualizeBoneAxes(gvrm, null);
     }
   }
-});
-
-// Home button handler
-document.getElementById('home-button').addEventListener('click', function() {
-  window.location.href = '../../index.html';
-});
-
-// Scene switch button handler
-document.getElementById('sceneButton').addEventListener('click', () => {
-  // Toggle scene
-  currentScene = currentScene === 1 ? 2 : 1;
-
-  // Remove and recreate grid helper
-  scene.remove(gridHelper);
-  if (currentScene === 1) {
-    gridHelper = new THREE.GridHelper(1000, 200, 0xdfdfdf, 0xdfefdf);
-  } else {
-    gridHelper = new THREE.GridHelper(300, 60, 0x808080, 0x808080);
-  }
-  scene.add(gridHelper);
-
-  // Remove and recreate sky
-  scene.remove(sky);
-  sky = createSky(scene);
-
-  // Update button styles
-  updateButtonStyles();
 });
 
 // Drag and drop implementation
