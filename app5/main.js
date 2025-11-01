@@ -33,6 +33,28 @@ camera.updateProjectionMatrix();
 const character1Camera = new THREE.PerspectiveCamera(75.0, 1.0, 0.1, 100.0);
 const character1CameraOffset = new THREE.Vector3(0, 1.5, -0.3); // Eye-level position, slightly forward
 
+// Recording system for Character 1's view
+let recordingCanvas = null;
+let recordingRenderer = null;
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+let currentDay = 0;
+let dailyDiaries = [];
+let diaryEntries = []; // Store all diary entries
+
+// Load daily diary patterns
+fetch('./daily_diary.json')
+  .then(response => response.json())
+  .then(data => {
+    dailyDiaries = data;
+    console.log('Daily diary patterns loaded successfully');
+  })
+  .catch(error => {
+    console.error('Failed to load daily diary patterns:', error);
+    dailyDiaries = ['今日も良い一日だった']; // Fallback
+  });
+
 const controls = new OrbitControls(camera, renderer.domElement);
 controls.screenSpacePanning = true;
 controls.target.set(0.0, 0.8, 0.0);
@@ -186,7 +208,7 @@ const characterNames = {
 };
 
 // Limit avatar count to not exceed gvrmFiles length
-const requestedN = parseInt(params.get('n')) || 6;
+const requestedN = parseInt(params.get('n')) || 4;
 let N = Math.min(requestedN, gvrmFiles.length); // Max 9 avatars
 
 // Track current animation state for each model
@@ -277,7 +299,7 @@ function checkVisibleObjects() {
       detectionCooldowns.set(name, now);
 
       // Add to timeline
-      addTimelineEvent(virtualTime, `しゅりくん: ${fullComment}`);
+      addTimelineEvent(virtualTime, `しゅり: ${fullComment}`);
     }
   }
 }
@@ -393,34 +415,29 @@ function addTimelineEvent(virtualTime, eventText) {
 
 function updateSpeechBubbles() {
   const currentTwoHourBlock = Math.floor(virtualTime / 2);
-  const now = Date.now();
 
-  // Check if 2-hour block has changed AND enough time has passed since last speech
-  if (currentTwoHourBlock !== lastTwoHourBlock && gvrms.length > 1 && (now - lastRandomSpeechTime) > 1000) {
-    // Update block immediately to prevent multiple speeches
+  // Update block tracker
+  if (currentTwoHourBlock !== lastTwoHourBlock) {
     lastTwoHourBlock = currentTwoHourBlock;
-
-    // Get list of characters not currently speaking (excluding Character 1, index 0)
-    const availableIndices = [];
-    for (let i = 1; i < gvrms.length; i++) { // Start from 1 to exclude Character 1
-      // Check if this character's speech bubble is not currently visible
-      if (!speechBubbles[i] || !speechBubbles[i].classList.contains('show')) {
-        availableIndices.push(i);
-      }
-    }
-
-    // Only speak if there's at least one available character
-    if (availableIndices.length > 0) {
-      // Pick only ONE random character to speak
-      const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
-
-      // Get random gag
-      const gag = getRandomGag();
-
-      showSpeechBubble(randomIndex, gag);
-      lastRandomSpeechTime = now; // Record speech time
-    }
   }
+
+  // Random speech disabled for now
+  // const now = Date.now();
+  // if (currentTwoHourBlock !== lastTwoHourBlock && gvrms.length > 1 && (now - lastRandomSpeechTime) > 1000) {
+  //   lastTwoHourBlock = currentTwoHourBlock;
+  //   const availableIndices = [];
+  //   for (let i = 1; i < gvrms.length; i++) {
+  //     if (!speechBubbles[i] || !speechBubbles[i].classList.contains('show')) {
+  //       availableIndices.push(i);
+  //     }
+  //   }
+  //   if (availableIndices.length > 0) {
+  //     const randomIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+  //     const gag = getRandomGag();
+  //     showSpeechBubble(randomIndex, gag);
+  //     lastRandomSpeechTime = now;
+  //   }
+  // }
 
   // Update speech bubble positions for all visible bubbles
   for (let i = 0; i < speechBubbles.length; i++) {
@@ -570,6 +587,198 @@ async function setModelAnimation(gvrm, animationIndex) {
   }
 }
 
+// Initialize recording canvas and renderer
+function initRecording() {
+  recordingCanvas = document.createElement('canvas');
+  recordingCanvas.width = 640;
+  recordingCanvas.height = 480;
+
+  recordingRenderer = new THREE.WebGLRenderer({
+    canvas: recordingCanvas,
+    antialias: true,
+    preserveDrawingBuffer: true
+  });
+  recordingRenderer.setSize(640, 480);
+}
+
+// Start recording
+function startRecording() {
+  if (!recordingCanvas || isRecording) return;
+
+  const stream = recordingCanvas.captureStream(10); // 10 fps (約3フレームに1枚)
+  mediaRecorder = new MediaRecorder(stream, {
+    mimeType: 'video/webm;codecs=vp9',
+    videoBitsPerSecond: 1000000 // 1 Mbps (フレームレート低下に合わせて調整)
+  });
+
+  recordedChunks = [];
+
+  mediaRecorder.ondataavailable = (event) => {
+    if (event.data.size > 0) {
+      recordedChunks.push(event.data);
+    }
+  };
+
+  mediaRecorder.onstop = () => {
+    saveRecording();
+  };
+
+  mediaRecorder.start();
+  isRecording = true;
+  console.log(`Recording started for Day ${currentDay + 1}`);
+}
+
+// Stop recording and save
+function stopRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+  }
+}
+
+// Save recording to IndexedDB
+function saveRecording() {
+  if (recordedChunks.length === 0) return;
+
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const randomDiary = dailyDiaries[Math.floor(Math.random() * dailyDiaries.length)] || '今日も良い一日だった';
+
+  const entry = {
+    day: currentDay,
+    timestamp: Date.now(),
+    diary: randomDiary,
+    videoBlob: blob
+  };
+
+  // Save to IndexedDB
+  saveToIndexedDB(entry).then(() => {
+    console.log(`Day ${currentDay} recording saved`);
+    diaryEntries.unshift(entry); // Add to beginning (newest first)
+    displayDiaryEntry(entry);
+    currentDay++;
+
+    // Start recording for next day
+    recordedChunks = [];
+    startRecording();
+  });
+}
+
+// IndexedDB functions
+function openDatabase() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open('DiaryDatabase', 1);
+
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('diaries')) {
+        db.createObjectStore('diaries', { keyPath: 'day' });
+      }
+    };
+  });
+}
+
+function saveToIndexedDB(entry) {
+  return openDatabase().then(db => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['diaries'], 'readwrite');
+      const store = transaction.objectStore('diaries');
+      const request = store.put(entry);
+
+      request.onsuccess = () => resolve();
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+function loadAllDiaries() {
+  return openDatabase().then(db => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['diaries'], 'readonly');
+      const store = transaction.objectStore('diaries');
+      const request = store.getAll();
+
+      request.onsuccess = () => {
+        const entries = request.result;
+        entries.sort((a, b) => b.day - a.day); // Sort by day, newest first
+        resolve(entries);
+      };
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+// Display diary entry in UI
+function displayDiaryEntry(entry) {
+  const container = document.getElementById('diary-container');
+  if (!container) return;
+
+  const diaryCard = document.createElement('div');
+  diaryCard.className = 'diary-card';
+
+  const video = document.createElement('video');
+  video.className = 'diary-video';
+  video.controls = true;
+  video.loop = true;
+  video.muted = true;
+  video.src = URL.createObjectURL(entry.videoBlob);
+
+  const diaryText = document.createElement('div');
+  diaryText.className = 'diary-text';
+  diaryText.textContent = entry.diary;
+
+  const dayLabel = document.createElement('div');
+  dayLabel.className = 'diary-day';
+  dayLabel.textContent = `Day ${entry.day + 1}`;
+
+  diaryCard.appendChild(video);
+  diaryCard.appendChild(dayLabel);
+  diaryCard.appendChild(diaryText);
+
+  // Insert at the beginning (left side)
+  container.insertBefore(diaryCard, container.firstChild);
+}
+
+// Clear all diaries from IndexedDB and UI
+function clearAllDiaries() {
+  return openDatabase().then(db => {
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(['diaries'], 'readwrite');
+      const store = transaction.objectStore('diaries');
+      const request = store.clear();
+
+      request.onsuccess = () => {
+        // Clear UI
+        const container = document.getElementById('diary-container');
+        if (container) {
+          container.innerHTML = '';
+        }
+        // Reset state
+        diaryEntries = [];
+        currentDay = 0;
+        console.log('All diaries cleared');
+        resolve();
+      };
+      request.onerror = () => reject(request.error);
+    });
+  });
+}
+
+// Make clearAllDiaries accessible globally
+window.clearAllDiaries = clearAllDiaries;
+
+// Load existing diaries on startup
+loadAllDiaries().then(entries => {
+  diaryEntries = entries;
+  entries.forEach(entry => displayDiaryEntry(entry));
+  currentDay = entries.length > 0 ? Math.max(...entries.map(e => e.day)) + 1 : 0;
+  console.log(`Loaded ${entries.length} diary entries, starting at Day ${currentDay + 1}`);
+}).catch(error => {
+  console.error('Failed to load diaries:', error);
+});
+
 loadAllModels();
 
 const fpsc = new FPSCounter();
@@ -579,6 +788,9 @@ let stateAnim = "play";
 // Object detection frame counter (check every N frames for performance)
 let detectionFrameCounter = 0;
 const DETECTION_CHECK_INTERVAL = 10; // Check every 10 frames (~6 times per second at 60fps)
+
+// Track virtual time for recording
+let lastDayTime = 8; // Start time (same as virtualTime initial value)
 
 window.addEventListener('resize', function (event) {
   width = window.innerWidth;
@@ -733,8 +945,23 @@ function animate() {
 
   // Update virtual time (1 frame ≈ 0.016s at 60fps, so time advances by ~0.016 * timeSpeed per frame)
   virtualTime += timeSpeed / 60; // timeSpeed is per second, so divide by 60 for per-frame
+
+  // Check if a full day has passed (24 hours)
   if (virtualTime >= 24) {
     virtualTime -= 24; // Wrap around to 0 after 24 hours
+
+    // Stop current recording and save
+    if (isRecording) {
+      stopRecording();
+    }
+
+    lastDayTime = virtualTime;
+  }
+
+  // Initialize recording if not started yet and models are ready
+  if (!recordingCanvas && gvrms.length > 0 && gvrms[0] && gvrms[0].isReady) {
+    initRecording();
+    startRecording();
   }
 
   // Update sky based on time
@@ -802,11 +1029,11 @@ function animate() {
     // Match character's rotation
     character1Camera.quaternion.copy(character.quaternion);
 
-    // Render to bottom right viewport
-    const viewWidth = 320;
-    const viewHeight = 240;
+    // Render to bottom right viewport (above diary container)
+    const viewWidth = 240;
+    const viewHeight = 180;
     const viewX = width - viewWidth - 20; // 20px from right edge
-    const viewY = 20; // 20px from bottom
+    const viewY = 250; // 250px from bottom (above diary container)
 
     character1Camera.aspect = viewWidth / viewHeight;
     character1Camera.updateProjectionMatrix();
@@ -817,6 +1044,24 @@ function animate() {
   }
 
   renderer.setScissorTest(false);
+
+  // Render to recording canvas (Character 1's view)
+  if (recordingRenderer && isRecording && gvrms.length > 0 && gvrms[0] && gvrms[0].isReady && gvrms[0].character && gvrms[0].character.currentVrm) {
+    const character = gvrms[0].character.currentVrm.scene;
+
+    // Position camera at character's eye level
+    character1Camera.position.copy(character.position).add(
+      character1CameraOffset.clone().applyQuaternion(character.quaternion)
+    );
+
+    // Match character's rotation
+    character1Camera.quaternion.copy(character.quaternion);
+
+    character1Camera.aspect = 640 / 480;
+    character1Camera.updateProjectionMatrix();
+
+    recordingRenderer.render(scene, character1Camera);
+  }
 
   fpsc.update();
   requestAnimationFrame(animate);
