@@ -1,0 +1,355 @@
+<!--
+  Copyright (c) 2025 naruya
+  Licensed under the MIT License.
+  See the LICENSE file in the project root for full license information.
+-->
+
+
+<!DOCTYPE html>
+
+<html>
+
+<head>
+  <meta charset="utf-8" />
+  <title>Avatar World</title>
+  <meta name="viewport"
+    content="width=device-width, initial-scale=1.0, minimum-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <style>
+    body {
+      font-size: 14px;
+      margin: 0px;
+      display: flex;
+      overflow: hidden;
+      color: white;
+      background-color: black;
+    }
+
+    #threejs-container {
+      position: absolute;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: -1;
+    }
+
+    #info {
+      font-size: 12px;
+      top: 4px;
+      left: 8px;
+      position: absolute;
+      color: white !important;
+    }
+
+    #analog-clock {
+      position: absolute;
+      top: 8px;
+      left: 8px;
+      width: 80px;
+      height: 80px;
+      border: 3px solid rgba(255, 255, 255, 0.6);
+      border-radius: 50%;
+      background: rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+    }
+
+    .clock-hand {
+      position: absolute;
+      background: white;
+      transform-origin: bottom center;
+      left: 50%;
+      bottom: 50%;
+      border-radius: 2px;
+    }
+
+    #hour-hand {
+      width: 3px;
+      height: 20px;
+      margin-left: -1.5px;
+      opacity: 0.9;
+    }
+
+    #minute-hand {
+      width: 2px;
+      height: 28px;
+      margin-left: -1px;
+      opacity: 0.9;
+    }
+
+    #clock-center {
+      position: absolute;
+      width: 6px;
+      height: 6px;
+      background: white;
+      border-radius: 50%;
+      top: 50%;
+      left: 50%;
+      margin-left: -3px;
+      margin-top: -3px;
+    }
+
+    .clock-marker {
+      position: absolute;
+      width: 2px;
+      height: 6px;
+      background: rgba(255, 255, 255, 0.5);
+      left: 50%;
+      margin-left: -1px;
+      transform-origin: center 37px;
+    }
+
+    #fps-display {
+      position: absolute;
+      top: 96px;
+      left: 8px;
+      font-size: 12px;
+      color: white;
+    }
+
+    .speech-bubble {
+      position: absolute;
+      background: white;
+      color: black;
+      padding: 8px 12px;
+      border-radius: 12px;
+      font-size: 16px;
+      font-weight: bold;
+      pointer-events: none;
+      z-index: 1000;
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+
+    .speech-bubble::after {
+      content: '';
+      position: absolute;
+      bottom: -8px;
+      left: 50%;
+      margin-left: -8px;
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-top: 8px solid white;
+    }
+
+    .speech-bubble.show {
+      opacity: 1;
+    }
+
+    #infoR {
+      font-size: 12px;
+      top: 4px;
+      right: 8px;
+      position: absolute;
+      color: white !important;
+    }
+
+    #timeline {
+      position: absolute;
+      top: 40px;
+      right: 8px;
+      width: 280px;
+      max-height: 500px;
+      overflow-y: auto;
+      font-size: 11px;
+      color: rgba(255, 255, 255, 0.8);
+      background: rgba(0, 0, 0, 0.3);
+      padding: 10px;
+      border-radius: 8px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+    }
+
+    #timeline::-webkit-scrollbar {
+      width: 6px;
+    }
+
+    #timeline::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 3px;
+    }
+
+    #timeline::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 3px;
+    }
+
+    #timeline::-webkit-scrollbar-thumb:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
+
+    .timeline-header {
+      font-weight: bold;
+      font-size: 12px;
+      margin-bottom: 8px;
+      color: rgba(255, 200, 100, 1);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+      padding-bottom: 5px;
+    }
+
+    .timeline-entry {
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 4px;
+      border-left: 2px solid rgba(255, 200, 100, 0.5);
+    }
+
+    .timeline-time {
+      font-weight: bold;
+      color: rgba(255, 200, 100, 1);
+      font-size: 10px;
+    }
+
+    .timeline-event {
+      margin-top: 2px;
+      color: rgba(255, 255, 255, 0.85);
+    }
+
+    .button-container {
+      display: flex;
+      gap: 10px;
+      position: fixed;
+      bottom: 20px;
+      left: 20px;
+      z-index: 9999;
+    }
+
+    .control-button {
+      padding: 10px 20px;
+      background-color: rgba(0, 0, 0, 0.2);
+      color: rgba(255, 255, 255, 0.4);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .control-button:hover {
+      transform: scale(1.05);
+    }
+
+    .avatar-control-button {
+      padding: 5px 15px;
+      background-color: rgba(255, 255, 255, 0.1);
+      color: rgba(255, 255, 255, 0.8);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 16px;
+      transition: all 0.3s ease;
+    }
+
+    .avatar-control-button:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+    }
+
+    .avatar-control-button:disabled {
+      opacity: 0.3;
+      cursor: not-allowed;
+    }
+
+    .avatar-control-container {
+      position: fixed;
+      bottom: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      color: rgba(255, 255, 255, 0.8);
+      z-index: 9999;
+    }
+
+    .social-link {
+      position: fixed;
+      bottom: 20px;
+      z-index: 9999;
+      display: flex;
+      width: 40px;
+      height: 40px;
+      background-color: rgba(255, 255, 255, 0.1);
+      border-radius: 50%;
+      transition: all 0.3s ease;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+    }
+
+    .social-link:hover {
+      background-color: rgba(255, 255, 255, 0.2);
+      transform: scale(1.1);
+      border-color: rgba(255, 255, 255, 0.4);
+    }
+
+    .social-link svg {
+      width: 20px;
+      height: 20px;
+      fill: white;
+    }
+
+    .twitter-link {
+      right: 20px;
+    }
+  </style>
+</head>
+
+<body>
+  <!-- Analog Clock -->
+  <div id="analog-clock">
+    <div class="clock-marker" style="transform: rotate(0deg);"></div>
+    <div class="clock-marker" style="transform: rotate(30deg);"></div>
+    <div class="clock-marker" style="transform: rotate(60deg);"></div>
+    <div class="clock-marker" style="transform: rotate(90deg);"></div>
+    <div class="clock-marker" style="transform: rotate(120deg);"></div>
+    <div class="clock-marker" style="transform: rotate(150deg);"></div>
+    <div class="clock-marker" style="transform: rotate(180deg);"></div>
+    <div class="clock-marker" style="transform: rotate(210deg);"></div>
+    <div class="clock-marker" style="transform: rotate(240deg);"></div>
+    <div class="clock-marker" style="transform: rotate(270deg);"></div>
+    <div class="clock-marker" style="transform: rotate(300deg);"></div>
+    <div class="clock-marker" style="transform: rotate(330deg);"></div>
+    <div id="hour-hand" class="clock-hand"></div>
+    <div id="minute-hand" class="clock-hand"></div>
+    <div id="clock-center"></div>
+  </div>
+
+  <div id="fps-display">
+    FPS: <span id="fpsdisplay" style="display: inline;"></span>
+  </div>
+
+  <div id="infoR" class="info">
+    Loading: <div id="loaddisplay" style="display: inline;">0%</div>
+  </div>
+
+  <div id="timeline">
+    <div class="timeline-header">Timeline (24h)</div>
+    <div id="timeline-entries"></div>
+  </div>
+
+  <div id="threejs-container"></div>
+  <div id="speech-bubbles-container"></div>
+
+  <!-- Local TensorFlow.js libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/seedrandom/3.0.5/seedrandom.min.js"></script>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.min.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/",
+      "@pixiv/three-vrm": "https://cdn.jsdelivr.net/npm/@pixiv/three-vrm@2.1.0/lib/three-vrm.module.js",
+      "three/addons/controls/OrbitControls.js": "./lib/OrbitControls.js",
+      "three/addons/controls/TrackballControls.js": "./lib/TrackballControls.js",
+      "gaussian-splats-3d": "https://naruya.github.io/gs-edit/lib/gaussian-splats-3d.module.js",
+      "jszip": "https://cdn.jsdelivr.net/npm/jszip@3.10.1/+esm",
+      "gvrm": "https://naruya.github.io/gs-edit/lib/gaussian-vrm.min.js"
+    }
+  }
+  </script>
+
+  <script type="module" src="main.js"></script>
+</body>
+
+</html>
