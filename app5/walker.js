@@ -36,6 +36,25 @@ export class Walker {
     this.justChangedTarget = false; // Flag to prevent rapid target changes
 
     this.animationsLoaded = false;
+
+    // Special animations (based on actual FBX files in /assets)
+    this.specialAnimations = [
+      { name: 'Acknowledging', path: '../assets/Acknowledging.fbx', action: null },
+      { name: 'Around', path: '../assets/Around.fbx', action: null },
+      { name: 'Breathing', path: '../assets/Breathing.fbx', action: null },
+      { name: 'Chicken Dance', path: '../assets/Chicken Dance.fbx', action: null },
+      { name: 'Dizzy Idle', path: '../assets/Dizzy Idle.fbx', action: null },
+      { name: 'Flying', path: '../assets/Flying.fbx', action: null },
+      { name: 'Gangnam Style', path: '../assets/Gangnam Style.fbx', action: null },
+      { name: 'Happy Idle', path: '../assets/Happy Idle.fbx', action: null },
+      { name: 'Jab Cross', path: '../assets/Jab Cross.fbx', action: null },
+      { name: 'Listening', path: '../assets/Listening.fbx', action: null },
+      { name: 'Pointing', path: '../assets/Pointing.fbx', action: null },
+      { name: 'Shrugging', path: '../assets/Shrugging.fbx', action: null },
+      { name: 'Warrior', path: '../assets/Warrior.fbx', action: null }
+    ];
+    this.currentSpecialAnimation = null; // Track current special animation name
+    this.isPlayingSpecial = false; // Track if playing special animation
   }
 
   // Set new target position
@@ -77,6 +96,11 @@ export class Walker {
       return;
     }
 
+    // Skip normal behavior when playing special animation
+    if (this.isPlayingSpecial) {
+      return;
+    }
+
     const character = this.gvrm.character.currentVrm.scene;
 
     // Toggle between walking and stopping
@@ -111,6 +135,11 @@ export class Walker {
       // Set new target when reached
       if (distanceToTarget < this.arrivalThreshold) {
         this.setNewTarget();
+
+        // 33% chance to play a special animation
+        if (Math.random() < 0.33) {
+          this.playRandomSpecialAnimation();
+        }
       }
     }
 
@@ -175,7 +204,7 @@ export class Walker {
     }
   }
 
-  switchToWalking() {
+  async switchToWalking() {
     if (!this.walkingAction || !this.idleAction) return;
 
     if (this.currentAnimation === 'walking') return;
@@ -195,10 +224,41 @@ export class Walker {
     }
   }
 
-  switchToIdle() {
-    if (!this.walkingAction || !this.idleAction) return;
+  async switchToIdle() {
+    if (!this.idleAction) return;
 
     if (this.currentAnimation === 'idle') return;
+
+    // If coming from special animation, reload idle animation
+    if (this.isPlayingSpecial) {
+      try {
+        await this.gvrm.changeFBX('../assets/Idle.fbx');
+        this.idleAction = this.gvrm.character.action;
+        this.idleAction.play();
+        this.currentAnimation = 'idle';
+        this.isWalking = false;
+        this.isPlayingSpecial = false;
+        this.currentSpecialAnimation = null;
+
+        // Reload walking animation as well
+        await this.gvrm.changeFBX('../assets/Walking.fbx');
+        this.walkingAction = this.gvrm.character.action;
+
+        // Return to idle
+        await this.gvrm.changeFBX('../assets/Idle.fbx');
+        this.idleAction = this.gvrm.character.action;
+        this.idleAction.play();
+
+        console.log(`Walker ${this.index}: Returned to idle from special animation`);
+        return;
+      } catch (error) {
+        console.error(`Walker ${this.index}: Failed to reload idle animation:`, error);
+        return;
+      }
+    }
+
+    // Normal switch from walking to idle
+    if (!this.walkingAction) return;
 
     const fadeTime = 0.3;
     this.idleAction.enabled = true;
@@ -209,11 +269,100 @@ export class Walker {
 
     this.currentAnimation = 'idle';
     this.isWalking = false;
+    this.isPlayingSpecial = false;
+    this.currentSpecialAnimation = null;
 
     // Update GVRM action property
     if (this.gvrm.character.action !== this.idleAction) {
       this.gvrm.character.previousAction = this.gvrm.character.action;
       this.gvrm.character.action = this.idleAction;
+    }
+  }
+
+  async playRandomSpecialAnimation() {
+    if (!this.gvrm || !this.gvrm.isReady) return;
+
+    // Check if GVRM is currently loading
+    if (this.gvrm.character && this.gvrm.character.isLoading && this.gvrm.character.isLoading()) {
+      console.log(`Walker ${this.index}: Cannot play animation, GVRM is loading`);
+      return;
+    }
+
+    // Choose random special animation
+    const randomIndex = Math.floor(Math.random() * this.specialAnimations.length);
+    const selectedAnimation = this.specialAnimations[randomIndex];
+
+    try {
+      // Stop current animations (idle and walking)
+      if (this.idleAction) {
+        this.idleAction.stop();
+      }
+      if (this.walkingAction) {
+        this.walkingAction.stop();
+      }
+
+      // Load and play special animation
+      await this.gvrm.changeFBX(selectedAnimation.path);
+
+      // Verify that loading completed successfully
+      if (!this.gvrm.character || !this.gvrm.character.action) {
+        console.error(`Walker ${this.index}: Failed to load animation, no action available`);
+        this.switchToIdle();
+        return;
+      }
+
+      const specialAction = this.gvrm.character.action;
+
+      // Set to play once (not loop)
+      specialAction.setLoop(THREE.LoopOnce);
+      specialAction.clampWhenFinished = true;
+      specialAction.reset();
+      specialAction.play();
+
+      // Update state
+      this.currentAnimation = 'special';
+      this.isWalking = false;
+      this.isPlayingSpecial = true;
+      this.currentSpecialAnimation = selectedAnimation.name;
+
+      // Stop walking while playing animation
+      this.shouldWalk = false;
+      this.walkTimer = 0;
+
+      console.log(`Walker ${this.index}: Playing special animation ${selectedAnimation.name}`);
+
+      // Listen for animation finish and return to idle
+      const mixer = this.gvrm.character.mixer;
+
+      if (mixer) {
+        const onFinished = (e) => {
+          if (e.action === specialAction) {
+            mixer.removeEventListener('finished', onFinished);
+
+            // Return to idle after special animation finishes
+            this.switchToIdle();
+
+            // Resume random walking behavior
+            this.stopDuration = 60 + Math.random() * 120;
+          }
+        };
+
+        mixer.addEventListener('finished', onFinished);
+      } else {
+        // Fallback: Use timeout to return to idle (estimate animation duration)
+        const animationDuration = specialAction.getClip().duration * 1000; // Convert to milliseconds
+        setTimeout(() => {
+          this.switchToIdle();
+          this.stopDuration = 60 + Math.random() * 120;
+        }, animationDuration);
+      }
+    } catch (error) {
+      console.error(`Failed to play special animation:`, error);
+
+      // Fallback to idle on error
+      if (this.idleAction) {
+        this.switchToIdle();
+      }
     }
   }
 }

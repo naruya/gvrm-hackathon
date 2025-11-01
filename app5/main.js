@@ -274,9 +274,27 @@ function isObjectInCharacterView(character, object3D, maxDistance = 15, minDotPr
 function checkVisibleObjects() {
   if (!gvrms[0] || !gvrms[0].isReady || !gvrms[0].character || !gvrms[0].character.currentVrm) return;
   if (!detectionComments) return; // Wait for comments to load
+  if (!walkers[0]) return; // Wait for walker to be initialized
 
   const character1 = gvrms[0].character.currentVrm.scene;
   const now = Date.now();
+  const walker = walkers[0];
+
+  // Check if playing special animation (not idle or walk)
+  if (walker.isPlayingSpecial && walker.currentSpecialAnimation) {
+    // Use animation comment instead of object detection
+    const animComment = detectionComments[walker.currentSpecialAnimation];
+    if (animComment) {
+      // Only show once per animation (check cooldown)
+      const lastDetection = detectionCooldowns.get(`anim_${walker.currentSpecialAnimation}`);
+      if (!lastDetection || (now - lastDetection) > DETECTION_COOLDOWN) {
+        showSpeechBubble(0, animComment);
+        detectionCooldowns.set(`anim_${walker.currentSpecialAnimation}`, now);
+        addTimelineEvent(virtualTime, `しゅり: ${animComment}`);
+      }
+    }
+    return; // Don't check objects while playing special animation
+  }
 
   for (const detectable of detectableObjects) {
     const { name, object } = detectable;
